@@ -1,16 +1,69 @@
-# React + Vite
+# Dad's Trip
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A mobile-friendly expense splitter for one trip. It stores data in Cloud Firestore, calculates each member's contribution and share precisely to the paise, and shows the minimum transfers needed to settle up.
 
-Currently, two official plugins are available:
+## What it does
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Add, edit, and delete trip expenses.
+- Select the payer and every person included in a split.
+- Read members from `trips/dad-trip` in Firestore, with the original five-member list as a fallback.
+- Show total spend, each member's spend/share/net balance, and settlement instructions.
+- Support existing Firestore timestamp dates and older ISO-string dates.
 
-## React Compiler
+## Local development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+npm run dev
+```
 
-## Expanding the ESLint configuration
+The current Firebase project configuration is retained as a fallback so the existing app continues to work. For another project, copy `.env.example` to `.env.local`, supply its Firebase web configuration, and restart Vite. Do not commit `.env.local`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Useful checks:
+
+```bash
+npm run lint
+npm run build
+```
+
+## Firestore data model
+
+```text
+trips/dad-trip
+  members: ["Venu", "Brahmam", "SVR", "Ravi", "PLR"]
+
+trips/dad-trip/expenses/{expenseId}
+  amount: number
+  paidBy: string
+  splitAmong: string[]
+  notes: string
+  date: Firestore server timestamp
+  createdAt: Firestore server timestamp
+  updatedAt: Firestore server timestamp (after edits)
+```
+
+## Firebase security
+
+The Firebase client configuration is public by design; it is not a database access control mechanism. Before sharing the app broadly, enable Firebase Authentication and publish Firestore rules that require an authenticated user and restrict writes to valid data. Do not rely on open Firestore rules for a public deployment.
+
+## GitHub Pages deployment
+
+The Vite base path is configured for this repository: `/dads-trip/`.
+
+```bash
+npm run deploy
+```
+
+This builds the app and publishes the generated `dist` directory to `gh-pages`. Keep source code on `main`; `gh-pages` should contain only the generated site.
+
+## First GitHub source push
+
+This local repository is linked to `https://github.com/dakhilram/dads-trip.git`, but the remote currently has only `gh-pages`. After reviewing the changes:
+
+```bash
+git add .
+git commit -m "Upgrade Dad's Trip expense tracker"
+git push -u origin main
+```
+
+Then use `npm run deploy` to update the GitHub Pages site.

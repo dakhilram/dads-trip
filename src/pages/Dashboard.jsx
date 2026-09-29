@@ -1,114 +1,123 @@
-import { useEffect, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import { collection, doc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import ExpenseList from "../components/ExpenseList";
+import {
+  calculateTripSummary,
+  expensesCollectionPath,
+  formatINR,
+  getExpenseDate,
+  getMembers,
+  tripDocumentPath,
+} from "../lib/trip";
 
-export default function Dashboard({ onSelectPerson, onAddExpense }) {
-  const members = ["Venu", "Brahmam", "SVR", "Ravi", "PLR"];
-
+export default function Dashboard() {
+  const [members, setMembers] = useState(() => getMembers());
   const [expenses, setExpenses] = useState([]);
-  const [totals, setTotals] = useState({});
-  const [shares, setShares] = useState({});
-  const [totalTrip, setTotalTrip] = useState(0);
+  const [selectedMember, setSelectedMember] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, "trips", "dad-trip", "expenses"),
+    const unsubscribeTrip = onSnapshot(
+      doc(db, ...tripDocumentPath),
+      (snapshot) => setMembers(getMembers(snapshot.data())),
+      () => setLoadError("Could not load the trip members. Showing the saved member list."),
+    );
+    const unsubscribeExpenses = onSnapshot(
+      collection(db, ...expensesCollectionPath),
       (snapshot) => {
         const list = snapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
+          .map((expense) => ({ id: expense.id, ...expense.data() }))
+          .sort((first, second) => {
+            const firstTime = getExpenseDate(first)?.getTime() ?? 0;
+            const secondTime = getExpenseDate(second)?.getTime() ?? 0;
+            return secondTime - firstTime;
+          });
 
         setExpenses(list);
-        calculateSummary(list);
-      }
+        setIsLoading(false);
+      },
+      () => {
+        setLoadError("Could not load expenses. Check your Firebase connection and permissions.");
+        setIsLoading(false);
+      },
     );
 
-    return () => unsub();
+    return () => {
+      unsubscribeTrip();
+      unsubscribeExpenses();
+    };
   }, []);
 
-  const calculateSummary = (list) => {
-    let spent = {};
-    let share = {};
-
-    members.forEach((m) => {
-      spent[m] = 0;
-      share[m] = 0;
-    });
-
-    let totalAmount = 0;
-
-    list.forEach((exp) => {
-      const amount = exp.amount;
-      const payer = exp.paidBy;
-      const splitAmong = exp.splitAmong;
-
-      totalAmount += amount;
-      spent[payer] += amount;
-
-      const perPerson = amount / splitAmong.length;
-
-      splitAmong.forEach((p) => {
-        share[p] += perPerson;
-      });
-    });
-
-    setTotals(spent);
-    setShares(share);
-    setTotalTrip(totalAmount);
-  };
+  const summary = useMemo(
+    () => calculateTripSummary(expenses, members),
+    [expenses, members],
+  );
+  const activeMember = members.includes(selectedMember) ? selectedMember : "";
+  const memberSettlements = summary.settlements.filter(
+    (settlement) => settlement.from === activeMember || settlement.to === activeMember,
+  );
 
   return (
-    <div className="p-4 space-y-6">
-      <h1 className="text-2xl font-bold">Trip Summary</h1>
+    <main className="mx-auto max-w-3xl space-y-6 p-4 pb-28 sm:p-6">
+      <header>
+        <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Dad&apos;s Trip</p>
+        <h1 className="mt-1 text-3xl font-bold text-slate-900">Trip summary</h1>
+      </header>
 
-      {/* Total spent */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <p className="text-gray-600 text-sm">Total Spent</p>
-        <p className="text-3xl font-bold">₹{totalTrip.toFixed(2)}</p>
-      </div>
+      {loadError && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="alert">{loadError}</p>}
 
-      {/* Member Summary */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <p className="text-gray-600 text-sm mb-2">Member Summary</p>
+      <section className="rounded-2xl bg-blue-700 p-5 text-white shadow-sm">
+        <p className="text-sm font-medium text-blue-100">Total spent</p>
+        <p className="mt-1 text-4xl font-bold">{formatINR(summary.totalCents)}</p>
+        <p className="mt-2 text-sm text-blue-100">{expenses.length} expense{expenses.length === 1 ? "" : "s"} recorded</p>
+      </section>
 
-        {members.map((m) => (
-          <div key={m} className="flex justify-between py-1 border-b">
-            <span>{m}</span>
-            <span>
-              Spent: ₹{totals[m]?.toFixed(2)} | Share: ₹{shares[m]?.toFixed(2)}
-            </span>
-          </div>
-        ))}
-      </div>
+      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+        <h2 className="text-lg font-bold text-slate-900">Member summary</h2>
+        <div className="mt-3 divide-y divide-slate-100">
+          {members.map((member) => {
+            const balance = summary.balanceCents[member];
+            return (
+              <div key={member} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 text-sm">
+                <span className="font-semibold text-slate-800">{member}</span>
+                <span className="text-slate-600">Spent {formatINR(summary.spentCents[member])} · Share {formatINR(summary.shareCents[member])}</span>
+                <span className={balance >= 0 ? "font-semibold text-emerald-700" : "font-semibold text-rose-700"}>
+                  {balance >= 0 ? "+" : "−"}{formatINR(Math.abs(balance))}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
-      {/* Person selector */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <p className="text-gray-600 text-sm">Choose a Person</p>
-
-        <select
-          className="w-full p-3 border rounded mt-2"
-          onChange={(e) => {
-            if (e.target.value) onSelectPerson(e.target.value);
-          }}
-        >
-          <option value="">Select...</option>
-          {members.map((m) => (
-            <option key={m}>{m}</option>
-          ))}
+      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+        <label className="text-sm font-semibold text-slate-700" htmlFor="member-detail">View a member&apos;s settlement</label>
+        <select id="member-detail" className="mt-2 w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200" value={activeMember} onChange={(event) => setSelectedMember(event.target.value)}>
+          <option value="">Choose a member</option>
+          {members.map((member) => <option key={member} value={member}>{member}</option>)}
         </select>
-      </div>
 
-      {/* Expense list */}
-      <ExpenseList expenses={expenses} />
+        {activeMember && (
+          <div className="mt-4 rounded-xl bg-slate-50 p-4">
+            <p className="font-semibold text-slate-900">
+              Net balance: <span className={summary.balanceCents[activeMember] >= 0 ? "text-emerald-700" : "text-rose-700"}>
+                {summary.balanceCents[activeMember] >= 0 ? "+" : "−"}{formatINR(Math.abs(summary.balanceCents[activeMember]))}
+              </span>
+            </p>
+            <div className="mt-3 space-y-2 text-sm">
+              {memberSettlements.length ? memberSettlements.map((settlement) => (
+                <p key={`${settlement.from}-${settlement.to}`} className="text-slate-700">
+                  {settlement.from === activeMember ? <>Pay <strong>{settlement.to}</strong> {formatINR(settlement.amountCents)}</> : <><strong>{settlement.from}</strong> pays you {formatINR(settlement.amountCents)}</>}
+                </p>
+              )) : <p className="text-slate-500">No settlement is needed.</p>}
+            </div>
+          </div>
+        )}
+      </section>
 
-      {/* Add Expense button */}
-      <button
-        onClick={onAddExpense}
-        className="w-full bg-blue-600 text-white p-3 rounded-lg text-center"
-      >
-        + Add Expense
-      </button>
-    </div>
+      <ExpenseList expenses={expenses} members={members} isLoading={isLoading} />
+    </main>
   );
 }

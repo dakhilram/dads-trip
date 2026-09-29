@@ -1,54 +1,42 @@
 import { useState } from "react";
 import Dashboard from "./pages/Dashboard";
-import PersonDetail from "./pages/PersonDetail";
 import AddExpense from "./pages/AddExpense";
 
 export default function App() {
-  const [screen, setScreen] = useState("dashboard");
-  const [selectedPerson, setSelectedPerson] = useState(null);
+  const [page, setPage] = useState("dashboard");
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-16">
-      {/* Screens */}
-      {screen === "dashboard" && (
-        <Dashboard
-          onSelectPerson={(person) => {
-            setSelectedPerson(person);
-            setScreen("person");
-          }}
-          onAddExpense={() => setScreen("add")}
-        />
-      )}
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      {page === "dashboard" && <Dashboard />}
+      {page === "add" && <AddExpense setPage={setPage} />}
 
-      {screen === "person" && (
-        <PersonDetail
-          person={selectedPerson}
-          goBack={() => setScreen("dashboard")}
-        />
-      )}
-
-      {screen === "add" && <AddExpense goBack={() => setScreen("dashboard")} />}
-
-      {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white shadow-md border-t flex justify-around py-3">
+      <nav aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 border-t border-slate-200 bg-white/95 shadow-lg backdrop-blur">
+        <div className="mx-auto flex max-w-3xl justify-around p-3">
         <button
-          className={`text-sm ${
-            screen === "dashboard" ? "text-blue-600 font-semibold" : ""
+          type="button"
+          onClick={() => setPage("dashboard")}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+            page === "dashboard"
+              ? "bg-blue-50 text-blue-700"
+              : "text-slate-600 hover:bg-slate-100"
           }`}
-          onClick={() => setScreen("dashboard")}
         >
           Dashboard
         </button>
 
         <button
-          className={`text-sm ${
-            screen === "add" ? "text-blue-600 font-semibold" : ""
+          type="button"
+          onClick={() => setPage("add")}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+            page === "add"
+              ? "bg-emerald-50 text-emerald-700"
+              : "text-slate-600 hover:bg-slate-100"
           }`}
-          onClick={() => setScreen("add")}
         >
           Add Expense
         </button>
-      </div>
+        </div>
+      </nav>
     </div>
   );
 }
