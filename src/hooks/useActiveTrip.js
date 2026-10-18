@@ -6,6 +6,7 @@ import {
   getExpenseDate,
   getLegacyNames,
   peopleCollectionPath,
+  settlementsCollectionPath,
   tripDocumentPath,
 } from "../lib/trip";
 import { importLegacyPeople } from "../lib/tripStore";
@@ -14,8 +15,9 @@ export default function useActiveTrip() {
   const [trip, setTrip] = useState(null);
   const [people, setPeople] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [settlements, setSettlements] = useState([]);
   const [error, setError] = useState("");
-  const [loaded, setLoaded] = useState({ trip: false, people: false, expenses: false });
+  const [loaded, setLoaded] = useState({ trip: false, people: false, expenses: false, settlements: false });
   const attemptedImports = useRef(new Set());
 
   useEffect(() => {
@@ -40,10 +42,18 @@ export default function useActiveTrip() {
       setError("Could not load expenses. Check your Firebase permissions.");
       setLoaded((current) => ({ ...current, expenses: true }));
     });
+    const unsubscribeSettlements = onSnapshot(collection(db, ...settlementsCollectionPath), (snapshot) => {
+      setSettlements(snapshot.docs.map((settlement) => ({ id: settlement.id, ...settlement.data() })).sort((first, second) => (getExpenseDate(second)?.getTime() ?? 0) - (getExpenseDate(first)?.getTime() ?? 0)));
+      setLoaded((current) => ({ ...current, settlements: true }));
+    }, () => {
+      setError("Could not load recorded paybacks. Check your Firebase permissions.");
+      setLoaded((current) => ({ ...current, settlements: true }));
+    });
     return () => {
       unsubscribeTrip();
       unsubscribePeople();
       unsubscribeExpenses();
+      unsubscribeSettlements();
     };
   }, []);
 
@@ -60,8 +70,9 @@ export default function useActiveTrip() {
     trip,
     people,
     expenses,
+    settlements,
     error,
     clearError: () => setError(""),
-    isLoading: !loaded.trip || !loaded.people || !loaded.expenses,
+    isLoading: !loaded.trip || !loaded.people || !loaded.expenses || !loaded.settlements,
   };
 }
