@@ -6,11 +6,11 @@ import useActiveTrip from "./hooks/useActiveTrip";
 
 export default function App() {
   const [page, setPage] = useState("dashboard");
-  const { people, expenses, error, isLoading } = useActiveTrip();
+  const { people, expenses, settlements, error, isLoading } = useActiveTrip();
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      {page === "dashboard" && <Dashboard people={people} expenses={expenses} isLoading={isLoading} loadError={error} setPage={setPage} />}
+      {page === "dashboard" && <Dashboard people={people} expenses={expenses} settlements={settlements} isLoading={isLoading} loadError={error} setPage={setPage} />}
       {page === "people" && <People people={people} expenses={expenses} setPage={setPage} />}
       {page === "add" && <AddExpense people={people} setPage={setPage} />}
 
