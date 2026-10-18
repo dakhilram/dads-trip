@@ -22,6 +22,11 @@ export function toBasisPoints(value) {
   return Number.isFinite(percentage) ? Math.round(percentage * 100) : 0;
 }
 
+export function isRecordedSettlement(expense) {
+  const type = String(expense?.recordType ?? expense?.transactionType ?? "").trim().toLocaleLowerCase();
+  return type === "settlement" || type === "payback" || type === "repayment" || type === "payment";
+}
+
 export function validateExpenseSplit(amountPaise, participants, splitType, exactValues, percentageValues) {
   if (!participants.length) return "Select at least one participant.";
   if (splitType === "exact") {
@@ -84,6 +89,16 @@ export function getExpenseAmountPaise(expense) {
   return Number.isInteger(expense.amountPaise) ? expense.amountPaise : toPaise(expense.amount);
 }
 
+export function getRecordedSettlement(expense, people) {
+  if (!isRecordedSettlement(expense)) return null;
+  const amountPaise = getExpenseAmountPaise(expense);
+  const fromId = resolvePersonId(expense.fromId ?? expense.paidBy, people);
+  const participantIds = getExpensePersonIds(expense, people);
+  const toId = resolvePersonId(expense.toId, people) ?? participantIds[0] ?? null;
+  if (amountPaise <= 0 || !fromId || !toId || fromId === toId) return null;
+  return { id: expense.id, fromId, toId, amountPaise, notes: expense.notes ?? "", date: getExpenseDate(expense) };
+}
+
 function allocatePercentageShares(amountPaise, participantIds, percentageBps) {
   const allocations = participantIds.map((id, index) => {
     const numerator = amountPaise * (percentageBps[id] ?? 0);
@@ -100,6 +115,7 @@ function allocatePercentageShares(amountPaise, participantIds, percentageBps) {
 }
 
 export function getExpenseShares(expense, people) {
+  if (isRecordedSettlement(expense)) return null;
   const participantIds = getExpensePersonIds(expense, people);
   const amountPaise = getExpenseAmountPaise(expense);
   if (amountPaise <= 0 || !participantIds.length) return null;
@@ -127,6 +143,7 @@ export function calculateTripSummary(expenses, people) {
   let totalPaise = 0;
 
   expenses.forEach((expense) => {
+    if (isRecordedSettlement(expense)) return;
     const amountPaise = getExpenseAmountPaise(expense);
     const paidBy = resolvePersonId(expense.paidBy, people);
     const shares = getExpenseShares(expense, people);
@@ -137,6 +154,12 @@ export function calculateTripSummary(expenses, people) {
   });
 
   const balancePaise = Object.fromEntries(people.map((person) => [person.id, paidPaise[person.id] - owedPaise[person.id]]));
+  const recordedPayments = expenses.map((expense) => getRecordedSettlement(expense, people)).filter(Boolean);
+  recordedPayments.forEach((payment) => {
+    balancePaise[payment.fromId] += payment.amountPaise;
+    balancePaise[payment.toId] -= payment.amountPaise;
+  });
+
   const debtors = people.filter((person) => balancePaise[person.id] < 0).map((person) => ({ person, amountPaise: Math.abs(balancePaise[person.id]) }));
   const creditors = people.filter((person) => balancePaise[person.id] > 0).map((person) => ({ person, amountPaise: balancePaise[person.id] }));
   const settlements = [];
@@ -152,9 +175,9 @@ export function calculateTripSummary(expenses, people) {
     if (debtor.amountPaise === 0) debtorIndex += 1;
     if (creditor.amountPaise === 0) creditorIndex += 1;
   }
-  return { totalPaise, paidPaise, owedPaise, balancePaise, settlements };
+  return { totalPaise, paidPaise, owedPaise, balancePaise, settlements, recordedPayments };
 }
 
 export function isPersonReferenced(person, expenses) {
-  return expenses.some((expense) => expense.paidBy === person.id || expense.participants?.includes(person.id) || personMatchesLegacyName(person, expense.paidBy) || expense.splitAmong?.some((name) => personMatchesLegacyName(person, name)));
+  return expenses.some((expense) => expense.paidBy === person.id || expense.fromId === person.id || expense.toId === person.id || expense.participants?.includes(person.id) || personMatchesLegacyName(person, expense.paidBy) || expense.splitAmong?.some((name) => personMatchesLegacyName(person, name)));
 }
