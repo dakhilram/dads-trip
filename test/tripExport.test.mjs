@@ -67,3 +67,88 @@ test("legacy names, rename compatibility, person deletion guard, and recalculati
   assert.equal(afterDelete.balancePaise.mahesh, -260000);
   assert.equal(Object.values(afterDelete.balancePaise).reduce((sum, amount) => sum + amount, 0), 0);
 });
+
+
+test("recorded payback reduces balances without increasing trip spending", () => {
+  const paybackPeople = [
+    { id: "venu", name: "Venu", legacyNames: [] },
+    { id: "ram", name: "Ram", legacyNames: [] },
+  ];
+  const tripExpenses = [
+    {
+      notes: "Trip costs",
+      amountPaise: 2500000,
+      paidBy: "venu",
+      participants: ["venu", "ram"],
+      splitType: "exact",
+      exactAmountsPaise: { venu: 2070000, ram: 430000 },
+    },
+  ];
+  const paybacks = [
+    { id: "payment-1", recordType: "settlement", fromId: "ram", toId: "venu", amountPaise: 330000 },
+  ];
+
+  const before = calculateTripSummary(tripExpenses, paybackPeople);
+  const after = calculateTripSummary(tripExpenses, paybackPeople, paybacks);
+
+  assert.equal(before.totalPaise, 2500000);
+  assert.equal(after.totalPaise, 2500000);
+  assert.equal(after.paidPaise.venu, 2500000);
+  assert.equal(after.owedPaise.venu, 2070000);
+  assert.equal(after.balancePaise.venu, 100000);
+  assert.equal(after.balancePaise.ram, -100000);
+  assert.equal(after.settlements.length, 1);
+  assert.deepEqual(after.settlements[0], { fromId: "ram", toId: "venu", amountPaise: 100000 });
+  assert.equal(Object.values(after.balancePaise).reduce((sum, amount) => sum + amount, 0), 0);
+
+  const report = buildTripExport({ people: paybackPeople, expenses: tripExpenses, summary: after, exportedAt: new Date("2026-10-17T12:00:00Z") });
+  assert.equal(report.totalPaise, 2500000);
+  assert.equal(report.expenseCount, 1);
+  assert.equal(report.recordedPaymentRows.length, 1);
+  assert.equal(report.recordedPaymentRows[0].amountPaise, 330000);
+  assert.equal(report.settlementRows[0].amountPaise, 100000);
+
+  const csv = buildTripCsv(report);
+  assert.match(csv, /recordedPayback/);
+  assert.match(csv, /3300\.00/);
+  assert.match(csv, /remainingSettlement/);
+  assert.match(csv, /1000\.00/);
+});
+
+test("legacy expense document explicitly marked as settlement is excluded from spending", () => {
+  const paybackPeople = [
+    { id: "venu", name: "Venu", legacyNames: [] },
+    { id: "ram", name: "Ram", legacyNames: [] },
+  ];
+  const records = [
+    {
+      notes: "Trip costs",
+      amountPaise: 2500000,
+      paidBy: "venu",
+      participants: ["venu", "ram"],
+      splitType: "exact",
+      exactAmountsPaise: { venu: 2070000, ram: 430000 },
+    },
+    {
+      id: "old-payback",
+      recordType: "settlement",
+      amountPaise: 330000,
+      paidBy: "ram",
+      fromId: "ram",
+      toId: "venu",
+      participants: ["venu"],
+      splitType: "equal",
+    },
+  ];
+
+  const summary = calculateTripSummary(records, paybackPeople);
+  assert.equal(summary.totalPaise, 2500000);
+  assert.equal(summary.balancePaise.venu, 100000);
+  assert.equal(summary.balancePaise.ram, -100000);
+  assert.equal(summary.recordedPayments.length, 1);
+
+  const report = buildTripExport({ people: paybackPeople, expenses: records, summary, exportedAt: new Date("2026-10-17T12:00:00Z") });
+  assert.equal(report.expenseCount, 1);
+  assert.equal(report.expenseRows.length, 1);
+  assert.equal(report.recordedPaymentRows.length, 1);
+});
