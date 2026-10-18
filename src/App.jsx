@@ -11,7 +11,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       {page === "dashboard" && <Dashboard people={people} expenses={expenses} settlements={settlements} isLoading={isLoading} loadError={error} setPage={setPage} />}
-      {page === "people" && <People people={people} expenses={expenses} setPage={setPage} />}
+      {page === "people" && <People people={people} expenses={expenses} settlements={settlements} setPage={setPage} />}
       {page === "add" && <AddExpense people={people} setPage={setPage} />}
 
       <nav aria-label="Main navigation" className="fixed bottom-0 left-0 right-0 border-t border-slate-200 bg-white/95 shadow-lg backdrop-blur">
