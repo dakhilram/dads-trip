@@ -137,7 +137,17 @@ export function getExpenseShares(expense, people) {
   return Object.fromEntries(participantIds.map((id, index) => [id, baseShare + (index < remainder ? 1 : 0)]));
 }
 
-export function calculateTripSummary(expenses, people) {
+function normalizeSettlementRecord(record, people) {
+  if (!record) return null;
+  const amountPaise = Number.isInteger(record.amountPaise) ? record.amountPaise : toPaise(record.amount);
+  const fromId = resolvePersonId(record.fromId ?? record.paidBy, people);
+  const references = Array.isArray(record.participants) ? record.participants : Array.isArray(record.splitAmong) ? record.splitAmong : [];
+  const toId = resolvePersonId(record.toId, people) ?? references.map((reference) => resolvePersonId(reference, people)).find((id) => id && id !== fromId) ?? null;
+  if (amountPaise <= 0 || !fromId || !toId || fromId === toId) return null;
+  return { ...record, fromId, toId, amountPaise };
+}
+
+export function calculateTripSummary(expenses, people, settlementRecords = []) {
   const paidPaise = Object.fromEntries(people.map((person) => [person.id, 0]));
   const owedPaise = Object.fromEntries(people.map((person) => [person.id, 0]));
   let totalPaise = 0;
@@ -154,7 +164,9 @@ export function calculateTripSummary(expenses, people) {
   });
 
   const balancePaise = Object.fromEntries(people.map((person) => [person.id, paidPaise[person.id] - owedPaise[person.id]]));
-  const recordedPayments = expenses.map((expense) => getRecordedSettlement(expense, people)).filter(Boolean);
+  const legacyRecordedPayments = expenses.map((expense) => getRecordedSettlement(expense, people)).filter(Boolean);
+  const dedicatedRecordedPayments = settlementRecords.map((record) => normalizeSettlementRecord(record, people)).filter(Boolean);
+  const recordedPayments = [...legacyRecordedPayments, ...dedicatedRecordedPayments];
   recordedPayments.forEach((payment) => {
     balancePaise[payment.fromId] += payment.amountPaise;
     balancePaise[payment.toId] -= payment.amountPaise;
