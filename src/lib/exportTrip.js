@@ -1,5 +1,6 @@
 import {
   formatExpenseDate,
+  getExpenseDate,
   getExpenseAmountPaise,
   getExpensePersonIds,
   getExpenseShares,
@@ -96,7 +97,7 @@ export function buildTripExport({ people, expenses, summary, exportedAt = new Da
     from: peopleById[payment.fromId]?.name ?? "Unknown person",
     to: peopleById[payment.toId]?.name ?? "Unknown person",
     amountPaise: payment.amountPaise,
-    date: payment.date ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(payment.date) : "",
+    date: getExpenseDate(payment) ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(getExpenseDate(payment)) : "",
   }));
   const settlementRows = summary.settlements.map((settlement) => ({
     from: peopleById[settlement.fromId]?.name ?? "Unknown person",
