@@ -25,7 +25,7 @@ export default function AddExpense({ people, setPage }) {
       setError(validationError);
       return;
     }
-    const payload = { amountPaise, paidBy, participants: validParticipants, splitType, notes: notes.trim(), date: serverTimestamp(), createdAt: serverTimestamp() };
+    const payload = { recordType: "expense", amountPaise, paidBy, participants: validParticipants, splitType, notes: notes.trim(), date: serverTimestamp(), createdAt: serverTimestamp() };
     if (splitType === "exact") payload.exactAmountsPaise = Object.fromEntries(validParticipants.map((id) => [id, toPaise(exactValues[id])])) ;
     if (splitType === "percentage") payload.percentageBps = Object.fromEntries(validParticipants.map((id) => [id, toBasisPoints(percentageValues[id])])) ;
     setError("");
