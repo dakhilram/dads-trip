@@ -13,10 +13,11 @@ import {
   validateExpenseSplit,
 } from "../lib/trip";
 
-export default function EditExpense({ expense, people, onClose }) {
+export default function EditExpense({ expense, people, storagePath = expensesCollectionPath, onClose }) {
   const initialPayer = resolvePersonId(expense.paidBy ?? expense.fromId, people) ?? "";
   const initialParticipants = getExpensePersonIds(expense, people);
-  const [entryType, setEntryType] = useState(isRecordedSettlement(expense) ? "payback" : "expense");
+  const isLegacyStoredPayback = storagePath !== expensesCollectionPath;
+  const [entryType, setEntryType] = useState(isRecordedSettlement(expense) || isLegacyStoredPayback ? "payback" : "expense");
   const [amount, setAmount] = useState(String(getExpenseAmountPaise(expense) / 100));
   const [paidBy, setPaidBy] = useState(initialPayer);
   const [paybackTo, setPaybackTo] = useState(() => resolvePersonId(expense.toId, people) ?? initialParticipants.find((id) => id !== initialPayer) ?? "");
@@ -51,7 +52,7 @@ export default function EditExpense({ expense, people, onClose }) {
       setError("");
       setIsSaving(true);
       try {
-        await updateDoc(doc(db, ...expensesCollectionPath, expense.id), {
+        await updateDoc(doc(db, ...storagePath, expense.id), {
           amountPaise,
           paidBy,
           fromId: paidBy,
@@ -100,7 +101,7 @@ export default function EditExpense({ expense, people, onClose }) {
     setError("");
     setIsSaving(true);
     try {
-      await updateDoc(doc(db, ...expensesCollectionPath, expense.id), payload);
+      await updateDoc(doc(db, ...storagePath, expense.id), payload);
       onClose();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Could not update this expense. Please try again.");
@@ -119,7 +120,7 @@ export default function EditExpense({ expense, people, onClose }) {
       <form className="mt-5 space-y-4" onSubmit={saveChanges}>
         {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">{error}</p>}
 
-        <fieldset>
+        {!isLegacyStoredPayback && <fieldset>
           <legend className="text-sm font-semibold text-slate-700">Entry type</legend>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <label className={`cursor-pointer rounded-xl border p-3 text-sm font-semibold ${entryType === "expense" ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-700"}`}>
@@ -132,7 +133,7 @@ export default function EditExpense({ expense, people, onClose }) {
             </label>
           </div>
           {entryType === "payback" && <p className="mt-2 text-xs text-slate-500">Paybacks reduce outstanding balances and are never added to Total spent.</p>}
-        </fieldset>
+        </fieldset>}
 
         <label className="block text-sm font-semibold text-slate-700" htmlFor="edit-amount">Amount (₹)
           <input id="edit-amount" type="number" min="0.01" step="0.01" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 p-3" />
