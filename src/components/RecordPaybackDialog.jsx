@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
-import { formatINR, settlementsCollectionPath, toPaise } from "../lib/trip";
+import { expensesCollectionPath, formatINR, toPaise } from "../lib/trip";
 
 export default function RecordPaybackDialog({ isOpen, onClose, people, summary }) {
   const [fromId, setFromId] = useState("");
@@ -45,10 +45,13 @@ export default function RecordPaybackDialog({ isOpen, onClose, people, summary }
     setError("");
     setIsSaving(true);
     try {
-      await addDoc(collection(db, ...settlementsCollectionPath), {
+      await addDoc(collection(db, ...expensesCollectionPath), {
         recordType: "settlement",
         fromId,
         toId,
+        paidBy: fromId,
+        participants: [toId],
+        splitType: "equal",
         amountPaise,
         date: serverTimestamp(),
         createdAt: serverTimestamp(),
