@@ -4,6 +4,7 @@ import {
   getExpensePersonIds,
   getExpenseShares,
   resolvePersonId,
+  isRecordedSettlement,
 } from "./trip.js";
 
 function groupIndianDigits(digits) {
@@ -90,7 +91,13 @@ export function buildTripExport({ people, expenses, summary, exportedAt = new Da
     totalOwedPaise: summary.owedPaise[person.id] ?? 0,
     balancePaise: summary.balancePaise[person.id] ?? 0,
   }));
-  const expenseRows = expenses.map((expense) => buildExpenseRow(expense, people, peopleById));
+  const expenseRows = expenses.filter((expense) => !isRecordedSettlement(expense)).map((expense) => buildExpenseRow(expense, people, peopleById));
+  const recordedPaymentRows = (summary.recordedPayments ?? []).map((payment) => ({
+    from: peopleById[payment.fromId]?.name ?? "Unknown person",
+    to: peopleById[payment.toId]?.name ?? "Unknown person",
+    amountPaise: payment.amountPaise,
+    date: payment.date ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(payment.date) : "",
+  }));
   const settlementRows = summary.settlements.map((settlement) => ({
     from: peopleById[settlement.fromId]?.name ?? "Unknown person",
     to: peopleById[settlement.toId]?.name ?? "Unknown person",
@@ -102,9 +109,10 @@ export function buildTripExport({ people, expenses, summary, exportedAt = new Da
     fileDate: localDateStamp(exportedAt),
     totalPaise: summary.totalPaise,
     participantCount: people.length,
-    expenseCount: expenses.length,
+    expenseCount: expenseRows.length,
     peopleRows,
     expenseRows,
+    recordedPaymentRows,
     settlementRows,
   };
 }
@@ -119,7 +127,8 @@ export function buildTripCsv(data) {
   rows.push(["summary", "Dad's Trip", "", "", "", "", data.exportedAt.toLocaleString("en-IN"), paiseToDecimal(data.totalPaise), "", "", "", "", "", "", ""]);
   data.peopleRows.forEach((person) => rows.push(["person", person.name, paiseToDecimal(person.totalPaidPaise), paiseToDecimal(person.totalOwedPaise), paiseToDecimal(person.balancePaise), "", "", "", "", "", "", "", "", "", ""]));
   data.expenseRows.forEach((expense) => rows.push(["expense", "", "", "", "", expense.description, expense.date, paiseToDecimal(expense.amountPaise), expense.paidBy, expense.splitType, expense.participants, expense.shareDetails, "", "", ""]));
-  data.settlementRows.forEach((settlement) => rows.push(["settlement", "", "", "", "", "", "", "", "", "", "", "", settlement.from, settlement.to, paiseToDecimal(settlement.amountPaise)]));
+  data.recordedPaymentRows.forEach((payment) => rows.push(["recordedPayback", "", "", "", "", "", payment.date, "", "", "", "", "", payment.from, payment.to, paiseToDecimal(payment.amountPaise)]));
+  data.settlementRows.forEach((settlement) => rows.push(["remainingSettlement", "", "", "", "", "", "", "", "", "", "", "", settlement.from, settlement.to, paiseToDecimal(settlement.amountPaise)]));
   return `\uFEFF${rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n")}\r\n`;
 }
 
@@ -297,6 +306,11 @@ export async function downloadTripPdf(data) {
   sectionTitle("Expenses");
   if (!data.expenseRows.length) paragraph("No expenses have been recorded.", { color: colors.muted });
   else data.expenseRows.forEach(drawExpenseCard);
+
+  if (data.recordedPaymentRows.length) {
+    sectionTitle("Payments already made");
+    drawTable(["FROM", "TO", "AMOUNT"], data.recordedPaymentRows.map((payment) => ({ from: payment.from, to: payment.to, amount: formatPdfINR(payment.amountPaise) })), [{ key: "from", width: width * 0.38, bold: true }, { key: "to", width: width * 0.38, bold: true }, { key: "amount", width: width * 0.24, align: "right", bold: true }]);
+  }
 
   sectionTitle("Final settlement");
   if (!data.settlementRows.length) {
