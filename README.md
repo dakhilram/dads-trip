@@ -77,3 +77,8 @@ npm run deploy
 ```
 
 Keep source on `main`; this command only publishes the generated `dist` site to `gh-pages`.
+
+
+## Automatic deployment
+
+Pushes to `main` run tests, lint, and the production build, then publish the built site to the existing `gh-pages` branch used by GitHub Pages.
